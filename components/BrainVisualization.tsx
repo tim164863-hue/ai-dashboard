@@ -1,301 +1,243 @@
-"use client";
 
-import { useRef, useMemo, useCallback } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Text } from "@react-three/drei";
-import * as THREE from "three";
-import type { Agent, Task } from "@/lib/mock-data";
+import React, { useMemo, useRef } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { Points, PointMaterial, Float, Stars, OrbitControls, PerspectiveCamera, Text } from '@react-three/drei';
+import * as THREE from 'three';
+import { Agent, Task } from '../types';
+import { STATUS_COLORS } from '../data/agents';
 
-// ── Config ──────────────────────────────────────────
+// ── Brain shape generator with agent-aware coloring ─
 
-const PARTICLE_COUNT = 12000;
-const CONNECTION_COUNT = 80;
-
-// Agent region centers on the brain (normalized -1..1)
-const AGENT_REGIONS: Record<string, THREE.Vector3> = {
-  ula: new THREE.Vector3(-0.6, 0.3, 0.2),    // Left frontal — PM / coordination
-  "0xcat": new THREE.Vector3(0.0, 0.5, -0.1), // Top central — engineering core
-  kawa: new THREE.Vector3(0.6, 0.2, 0.3),     // Right frontal — support
-};
-
-const AGENT_COLORS: Record<string, string> = {
-  ula: "#00D9FF",
-  "0xcat": "#00E676",
-  kawa: "#FFB800",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  running: "#00D9FF",
-  completed: "#00E676",
-  pending: "#FFB800",
-  error: "#FF3366",
-};
-
-// ── Brain shape generator ───────────────────────────
-
-function generateBrainPoints(count: number): Float32Array {
+const generateBrainPoints = (count: number, agents: Agent[], scale = 1) => {
   const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const baseColor = new THREE.Color('#6B21A8'); // Purple base
+  const tmpVec = new THREE.Vector3();
 
   for (let i = 0; i < count; i++) {
-    // Spherical sampling with brain-like deformation
-    const theta = Math.random() * Math.PI * 2;
-    const phi = Math.acos(2 * Math.random() - 1);
-    const r = 0.8 + Math.random() * 0.2;
+    const isLeftLobe = Math.random() > 0.5;
+    const lobeX = isLeftLobe ? -0.4 : 0.4;
 
-    // Base sphere
-    let x = r * Math.sin(phi) * Math.cos(theta);
-    let y = r * Math.sin(phi) * Math.sin(theta);
-    let z = r * Math.cos(phi);
+    const u = Math.random();
+    const v = Math.random();
+    const theta = 2 * Math.PI * u;
+    const phi = Math.acos(2 * v - 1);
 
-    // Ellipsoid stretch (wider than tall, brain-like)
-    x *= 1.3;
-    y *= 1.0;
-    z *= 1.1;
+    // Brain wrinkle noise
+    const noise = (Math.sin(theta * 6) * Math.cos(phi * 4)) * 0.15;
 
-    // Central fissure (groove down the middle)
-    const fissureDepth = Math.exp(-x * x * 8) * 0.15;
-    y -= fissureDepth;
+    const rx = (1.3 + noise) * scale;
+    const ry = (1.9 + noise) * scale;
+    const rz = (1.4 + noise) * scale;
 
-    // Sulci (brain wrinkle noise)
-    const freq = 4.0;
-    const noise =
-      Math.sin(x * freq + z * freq * 0.7) *
-      Math.cos(y * freq * 1.3 + x * freq * 0.5) *
-      0.08;
-    x += noise * Math.cos(theta);
-    y += noise * Math.sin(theta);
-    z += noise * Math.cos(phi);
-
-    // Flatten bottom slightly
-    if (y < -0.6) {
-      y = -0.6 + (y + 0.6) * 0.3;
-    }
+    const x = (lobeX + rx * Math.sin(phi) * Math.cos(theta)) * 0.8;
+    const y = (ry * Math.sin(phi) * Math.sin(theta)) * 0.7;
+    const z = (rz * Math.cos(phi)) * 0.9;
 
     positions[i * 3] = x;
     positions[i * 3 + 1] = y;
     positions[i * 3 + 2] = z;
-  }
 
-  return positions;
-}
-
-// ── Particle colors based on agent proximity ────────
-
-function generateColors(positions: Float32Array, agents: Agent[]): Float32Array {
-  const colors = new Float32Array((positions.length / 3) * 3);
-  const baseColor = new THREE.Color("#6B21A8"); // Purple base
-  const tmpVec = new THREE.Vector3();
-
-  for (let i = 0; i < positions.length / 3; i++) {
-    tmpVec.set(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
-
+    // Color: blend between purple base and nearest agent color
+    tmpVec.set(x, y, z);
     let closestDist = Infinity;
     let closestColor = baseColor;
 
     for (const agent of agents) {
-      const region = AGENT_REGIONS[agent.id];
-      if (!region) continue;
-      const dist = tmpVec.distanceTo(region);
+      const regionVec = new THREE.Vector3(...agent.region);
+      const dist = tmpVec.distanceTo(regionVec);
       if (dist < closestDist) {
         closestDist = dist;
-        closestColor = new THREE.Color(AGENT_COLORS[agent.id] ?? "#6B21A8");
+        closestColor = new THREE.Color(agent.color);
       }
     }
 
-    // Blend: closer to agent region = more agent color, further = purple base
-    const influence = Math.max(0, 1 - closestDist / 1.2);
-    const blended = baseColor.clone().lerp(closestColor, influence * 0.7);
+    const influence = Math.max(0, 1 - closestDist / 1.4);
+    const blended = baseColor.clone().lerp(closestColor, influence * 0.65);
 
     colors[i * 3] = blended.r;
     colors[i * 3 + 1] = blended.g;
     colors[i * 3 + 2] = blended.b;
   }
 
-  return colors;
-}
+  return { positions, colors };
+};
 
-// ── Connection lines between agents based on tasks ──
+// ── Neural impulses traveling between points ────────
 
-interface ConnectionData {
-  start: THREE.Vector3;
-  end: THREE.Vector3;
-  color: THREE.Color;
-  speed: number;
-  offset: number;
-}
-
-function generateConnections(tasks: Task[]): ConnectionData[] {
-  const connections: ConnectionData[] = [];
-
-  // Agent-to-agent connections based on task relationships
-  const agentIds = Object.keys(AGENT_REGIONS);
-
-  for (const task of tasks) {
-    const fromRegion = AGENT_REGIONS[task.agentId];
-    if (!fromRegion) continue;
-
-    // Connect to other agents (simulating collaboration)
-    for (const otherId of agentIds) {
-      if (otherId === task.agentId) continue;
-      const toRegion = AGENT_REGIONS[otherId];
-      if (!toRegion) continue;
-
-      // Only some tasks create cross-agent connections
-      if (Math.random() > 0.4) continue;
-
-      const color = new THREE.Color(STATUS_COLORS[task.status] ?? "#6B21A8");
-      connections.push({
-        start: fromRegion.clone().add(new THREE.Vector3(
-          (Math.random() - 0.5) * 0.3,
-          (Math.random() - 0.5) * 0.3,
-          (Math.random() - 0.5) * 0.3,
-        )),
-        end: toRegion.clone().add(new THREE.Vector3(
-          (Math.random() - 0.5) * 0.3,
-          (Math.random() - 0.5) * 0.3,
-          (Math.random() - 0.5) * 0.3,
-        )),
-        color,
-        speed: 0.3 + Math.random() * 0.7,
-        offset: Math.random() * Math.PI * 2,
-      });
-    }
-  }
-
-  // Add some ambient neural connections
-  for (let i = 0; i < CONNECTION_COUNT - connections.length; i++) {
-    const fromIdx = Math.floor(Math.random() * agentIds.length);
-    const toIdx = (fromIdx + 1 + Math.floor(Math.random() * (agentIds.length - 1))) % agentIds.length;
-    const from = AGENT_REGIONS[agentIds[fromIdx]];
-    const to = AGENT_REGIONS[agentIds[toIdx]];
-    if (!from || !to) continue;
-
-    connections.push({
-      start: from.clone().add(new THREE.Vector3(
-        (Math.random() - 0.5) * 0.6,
-        (Math.random() - 0.5) * 0.6,
-        (Math.random() - 0.5) * 0.6,
-      )),
-      end: to.clone().add(new THREE.Vector3(
-        (Math.random() - 0.5) * 0.6,
-        (Math.random() - 0.5) * 0.6,
-        (Math.random() - 0.5) * 0.6,
-      )),
-      color: new THREE.Color("#6B21A8").lerp(new THREE.Color("#00D9FF"), Math.random() * 0.3),
-      speed: 0.1 + Math.random() * 0.3,
-      offset: Math.random() * Math.PI * 2,
+const NeuralImpulses = ({ count = 35, positions }: { count: number; positions: Float32Array }) => {
+  const groupRef = useRef<THREE.Group>(null!);
+  const impulses = useMemo(() => {
+    return Array.from({ length: count }).map(() => {
+      const startIdx = Math.floor(Math.random() * (positions.length / 3)) * 3;
+      const endIdx = Math.floor(Math.random() * (positions.length / 3)) * 3;
+      return {
+        start: new THREE.Vector3(positions[startIdx], positions[startIdx + 1], positions[startIdx + 2]),
+        end: new THREE.Vector3(positions[endIdx], positions[endIdx + 1], positions[endIdx + 2]),
+        progress: Math.random(),
+        speed: 0.008 + Math.random() * 0.015,
+      };
     });
-  }
+  }, [count, positions]);
 
-  return connections.slice(0, CONNECTION_COUNT);
-}
-
-// ── Brain Particles Component ───────────────────────
-
-function BrainParticles({ agents }: { agents: Agent[] }) {
-  const pointsRef = useRef<THREE.Points>(null);
-
-  const { positions, colors } = useMemo(() => {
-    const pos = generateBrainPoints(PARTICLE_COUNT);
-    const col = generateColors(pos, agents);
-    return { positions: pos, colors: col };
-  }, [agents]);
-
-  const sizes = useMemo(() => {
-    const s = new Float32Array(PARTICLE_COUNT);
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      s[i] = 0.008 + Math.random() * 0.012;
-    }
-    return s;
-  }, []);
-
-  useFrame(({ clock }) => {
-    if (!pointsRef.current) return;
-    const t = clock.getElapsedTime();
-
-    // Gentle breathing animation
-    pointsRef.current.rotation.y = t * 0.05;
-
-    // Pulse particle sizes
-    const sizeAttr = pointsRef.current.geometry.getAttribute("size") as THREE.BufferAttribute;
-    if (sizeAttr) {
-      for (let i = 0; i < PARTICLE_COUNT; i++) {
-        const base = sizes[i];
-        const pulse = Math.sin(t * 2 + i * 0.01) * 0.003;
-        sizeAttr.setX(i, base + pulse);
+  useFrame(() => {
+    if (!groupRef.current) return;
+    groupRef.current.children.forEach((child, i) => {
+      const imp = impulses[i];
+      imp.progress += imp.speed;
+      if (imp.progress > 1) {
+        imp.progress = 0;
+        const nextIdx = Math.floor(Math.random() * (positions.length / 3)) * 3;
+        imp.start.copy(imp.end);
+        imp.end.set(positions[nextIdx], positions[nextIdx + 1], positions[nextIdx + 2]);
       }
-      sizeAttr.needsUpdate = true;
+      child.position.lerpVectors(imp.start, imp.end, imp.progress);
+      child.scale.setScalar(0.8 + Math.sin(Date.now() * 0.01) * 0.2);
+    });
+  });
+
+  return (
+    <group ref={groupRef}>
+      {impulses.map((_, i) => (
+        <mesh key={i}>
+          <sphereGeometry args={[0.025, 6, 6]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.9} />
+        </mesh>
+      ))}
+    </group>
+  );
+};
+
+// ── Mist layer for depth ────────────────────────────
+
+const MistLayer = ({ count, color, size, speed, agents }: {
+  count: number; color: string; size: number; speed: number; agents: Agent[];
+}) => {
+  const pointsRef = useRef<THREE.Points>(null!);
+  const { positions } = useMemo(() => generateBrainPoints(count, agents, 1.2), [count, agents]);
+
+  useFrame((state) => {
+    const time = state.clock.getElapsedTime();
+    if (pointsRef.current) {
+      pointsRef.current.rotation.y = time * speed;
+      pointsRef.current.rotation.z = Math.sin(time * 0.1) * 0.05;
     }
   });
 
   return (
-    <points ref={pointsRef}>
-      <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          args={[positions, 3]}
-        />
-        <bufferAttribute
-          attach="attributes-color"
-          args={[colors, 3]}
-        />
-        <bufferAttribute
-          attach="attributes-size"
-          args={[sizes, 1]}
-        />
-      </bufferGeometry>
-      <pointsMaterial
-        vertexColors
+    <Points ref={pointsRef} positions={positions}>
+      <PointMaterial
         transparent
-        opacity={0.85}
-        size={0.015}
+        color={color}
+        size={size}
         sizeAttenuation
-        blending={THREE.AdditiveBlending}
         depthWrite={false}
+        blending={THREE.AdditiveBlending}
+        opacity={0.12}
       />
-    </points>
+    </Points>
   );
-}
+};
 
-// ── Neural Connections Component ────────────────────
+// ── Task connection lines (Bezier curves) ───────────
 
-function NeuralConnections({ tasks }: { tasks: Task[] }) {
-  const groupRef = useRef<THREE.Group>(null);
-
-  const connections = useMemo(() => generateConnections(tasks), [tasks]);
+const TaskConnections = ({ tasks, agents }: { tasks: Task[]; agents: Agent[] }) => {
+  const groupRef = useRef<THREE.Group>(null!);
 
   const lineObjects = useMemo(() => {
-    return connections.map((conn) => {
-      // Bezier curve for organic look
-      const mid = conn.start.clone().add(conn.end).multiplyScalar(0.5);
-      mid.y += 0.2 + Math.random() * 0.3; // Arc upward
+    const agentMap = new Map(agents.map(a => [a.id, a]));
+    const lines: { object: THREE.Line; speed: number; offset: number }[] = [];
+    const agentIds = agents.map(a => a.id);
 
-      const curve = new THREE.QuadraticBezierCurve3(conn.start, mid, conn.end);
-      const points = curve.getPoints(20);
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    // Task-based connections
+    for (const task of tasks) {
+      const fromAgent = agentMap.get(task.agentId);
+      if (!fromAgent) continue;
+
+      for (const otherId of agentIds) {
+        if (otherId === task.agentId) continue;
+        if (Math.random() > 0.45) continue;
+
+        const toAgent = agentMap.get(otherId);
+        if (!toAgent) continue;
+
+        const start = new THREE.Vector3(...fromAgent.region).add(
+          new THREE.Vector3((Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3)
+        );
+        const end = new THREE.Vector3(...toAgent.region).add(
+          new THREE.Vector3((Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3)
+        );
+        const mid = start.clone().add(end).multiplyScalar(0.5);
+        mid.y += 0.2 + Math.random() * 0.4;
+
+        const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+        const geometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(24));
+        const color = new THREE.Color(STATUS_COLORS[task.status] ?? '#6B21A8');
+
+        const material = new THREE.LineBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.35,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+
+        lines.push({
+          object: new THREE.Line(geometry, material),
+          speed: 0.3 + Math.random() * 0.7,
+          offset: Math.random() * Math.PI * 2,
+        });
+      }
+    }
+
+    // Ambient neural connections to fill up to ~80
+    const target = 80;
+    while (lines.length < target) {
+      const fromIdx = Math.floor(Math.random() * agentIds.length);
+      const toIdx = (fromIdx + 1 + Math.floor(Math.random() * (agentIds.length - 1))) % agentIds.length;
+      const from = agentMap.get(agentIds[fromIdx]);
+      const to = agentMap.get(agentIds[toIdx]);
+      if (!from || !to) continue;
+
+      const start = new THREE.Vector3(...from.region).add(
+        new THREE.Vector3((Math.random() - 0.5) * 0.7, (Math.random() - 0.5) * 0.7, (Math.random() - 0.5) * 0.7)
+      );
+      const end = new THREE.Vector3(...to.region).add(
+        new THREE.Vector3((Math.random() - 0.5) * 0.7, (Math.random() - 0.5) * 0.7, (Math.random() - 0.5) * 0.7)
+      );
+      const mid = start.clone().add(end).multiplyScalar(0.5);
+      mid.y += 0.15 + Math.random() * 0.3;
+
+      const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+      const geometry = new THREE.BufferGeometry().setFromPoints(curve.getPoints(20));
+      const color = new THREE.Color('#6B21A8').lerp(new THREE.Color('#00D9FF'), Math.random() * 0.3);
 
       const material = new THREE.LineBasicMaterial({
-        color: conn.color,
+        color,
         transparent: true,
-        opacity: 0.3,
+        opacity: 0.15,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       });
 
-      const line = new THREE.Line(geometry, material);
-      return { object: line, speed: conn.speed, offset: conn.offset };
-    });
-  }, [connections]);
+      lines.push({
+        object: new THREE.Line(geometry, material),
+        speed: 0.1 + Math.random() * 0.3,
+        offset: Math.random() * Math.PI * 2,
+      });
+    }
+
+    return lines.slice(0, target);
+  }, [tasks, agents]);
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
     const t = clock.getElapsedTime();
-
     lineObjects.forEach((entry, i) => {
-      const child = groupRef.current!.children[i];
+      const child = groupRef.current.children[i];
       if (child instanceof THREE.Line) {
         const mat = child.material as THREE.LineBasicMaterial;
-        mat.opacity = 0.15 + Math.sin(t * entry.speed * 3 + entry.offset) * 0.15;
+        mat.opacity = 0.12 + Math.sin(t * entry.speed * 3 + entry.offset) * 0.18;
       }
     });
   });
@@ -307,159 +249,190 @@ function NeuralConnections({ tasks }: { tasks: Task[] }) {
       ))}
     </group>
   );
-}
+};
 
-// ── Agent Node Labels ───────────────────────────────
+// ── Agent node markers with labels ──────────────────
 
-function AgentNodes({ agents }: { agents: Agent[] }) {
-  const groupRef = useRef<THREE.Group>(null);
+const AgentNodes = ({ agents }: { agents: Agent[] }) => {
+  const groupRef = useRef<THREE.Group>(null!);
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
     const t = clock.getElapsedTime();
-    // Gentle float
     groupRef.current.children.forEach((child, i) => {
-      child.position.y += Math.sin(t * 0.8 + i * 2) * 0.0003;
+      child.position.y += Math.sin(t * 0.8 + i * 2.1) * 0.0004;
     });
   });
 
   return (
     <group ref={groupRef}>
-      {agents.map((agent) => {
-        const pos = AGENT_REGIONS[agent.id];
-        if (!pos) return null;
-        const color = AGENT_COLORS[agent.id] ?? "#FFFFFF";
-
-        return (
-          <group key={agent.id} position={[pos.x, pos.y, pos.z]}>
-            {/* Glowing sphere */}
-            <mesh>
-              <sphereGeometry args={[0.06, 16, 16]} />
-              <meshBasicMaterial
-                color={color}
-                transparent
-                opacity={0.9}
-              />
-            </mesh>
-            {/* Outer glow */}
-            <mesh>
-              <sphereGeometry args={[0.1, 16, 16]} />
-              <meshBasicMaterial
-                color={color}
-                transparent
-                opacity={0.2}
-                blending={THREE.AdditiveBlending}
-                depthWrite={false}
-              />
-            </mesh>
-            {/* Label */}
-            <Text
-              position={[0, -0.18, 0]}
-              fontSize={0.08}
-              color={color}
-              anchorX="center"
-              anchorY="top"
-              font="/fonts/inter.woff"
-              outlineWidth={0.003}
-              outlineColor="#000000"
-            >
-              {agent.name}
-            </Text>
-            {/* Status indicator */}
-            <Text
-              position={[0, -0.27, 0]}
-              fontSize={0.05}
-              color={agent.status === "online" ? "#00E676" : agent.status === "idle" ? "#FFB800" : "#6B6B80"}
-              anchorX="center"
-              anchorY="top"
-            >
-              {agent.status === "online" ? "● ONLINE" : agent.status === "idle" ? "● IDLE" : "● OFFLINE"}
-            </Text>
-          </group>
-        );
-      })}
+      {agents.map((agent) => (
+        <group key={agent.id} position={agent.region}>
+          {/* Core sphere */}
+          <mesh>
+            <sphereGeometry args={[0.07, 16, 16]} />
+            <meshBasicMaterial color={agent.color} transparent opacity={0.95} />
+          </mesh>
+          {/* Outer glow */}
+          <mesh>
+            <sphereGeometry args={[0.12, 16, 16]} />
+            <meshBasicMaterial
+              color={agent.color}
+              transparent
+              opacity={0.2}
+              blending={THREE.AdditiveBlending}
+              depthWrite={false}
+            />
+          </mesh>
+          {/* Name label */}
+          <Text
+            position={[0, -0.22, 0]}
+            fontSize={0.09}
+            color={agent.color}
+            anchorX="center"
+            anchorY="top"
+            outlineWidth={0.004}
+            outlineColor="#000000"
+          >
+            {agent.name}
+          </Text>
+          {/* Status */}
+          <Text
+            position={[0, -0.33, 0]}
+            fontSize={0.055}
+            color={agent.status === 'online' ? '#00E676' : agent.status === 'idle' ? '#FFB800' : '#6B6B80'}
+            anchorX="center"
+            anchorY="top"
+          >
+            {agent.status === 'online' ? '● ONLINE' : agent.status === 'idle' ? '● IDLE' : '● OFFLINE'}
+          </Text>
+        </group>
+      ))}
     </group>
   );
-}
+};
 
-// ── Main Scene ──────────────────────────────────────
+// ── Core neural mesh (main brain) ───────────────────
 
-function BrainScene({ agents, tasks }: { agents: Agent[]; tasks: Task[] }) {
+const CoreNeuralMesh = ({ agents, tasks }: { agents: Agent[]; tasks: Task[] }) => {
+  const pointsRef = useRef<THREE.Points>(null!);
+
+  const { positions, colors } = useMemo(() => generateBrainPoints(12000, agents), [agents]);
+
+  // Internal short-range synaptic lines
+  const linePositions = useMemo(() => {
+    const arr: number[] = [];
+    for (let i = 0; i < 400; i++) {
+      const idx1 = Math.floor(Math.random() * (positions.length / 3)) * 3;
+      const idx2 = Math.floor(Math.random() * (positions.length / 3)) * 3;
+      const d2 =
+        (positions[idx1] - positions[idx2]) ** 2 +
+        (positions[idx1 + 1] - positions[idx2 + 1]) ** 2 +
+        (positions[idx1 + 2] - positions[idx2 + 2]) ** 2;
+      if (d2 < 0.6) {
+        arr.push(
+          positions[idx1], positions[idx1 + 1], positions[idx1 + 2],
+          positions[idx2], positions[idx2 + 1], positions[idx2 + 2]
+        );
+      }
+    }
+    return new Float32Array(arr);
+  }, [positions]);
+
+  useFrame((state) => {
+    const time = state.clock.getElapsedTime();
+    const rot = time * 0.1;
+    if (pointsRef.current) {
+      pointsRef.current.rotation.y = rot;
+      const s = 1 + Math.sin(time * 0.4) * 0.03;
+      pointsRef.current.scale.set(s, s, s);
+    }
+  });
+
+  // We need a separate ref for the line segments to sync rotation
+  const lineRef = useRef<THREE.LineSegments>(null!);
+  useFrame((state) => {
+    const time = state.clock.getElapsedTime();
+    if (lineRef.current) {
+      lineRef.current.rotation.y = time * 0.1;
+      const s = 1 + Math.sin(time * 0.4) * 0.03;
+      lineRef.current.scale.set(s, s, s);
+    }
+  });
+
   return (
-    <>
-      <ambientLight intensity={0.3} />
-      <pointLight position={[5, 5, 5]} intensity={0.5} color="#00D9FF" />
-      <pointLight position={[-5, 3, -5]} intensity={0.3} color="#6B21A8" />
+    <group>
+      {/* Main particle cloud */}
+      <Points ref={pointsRef} positions={positions} colors={colors}>
+        <PointMaterial
+          transparent
+          vertexColors
+          size={0.028}
+          sizeAttenuation
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </Points>
 
-      <BrainParticles agents={agents} />
-      <NeuralConnections tasks={tasks} />
+      {/* Short-range synaptic lines */}
+      <lineSegments ref={lineRef}>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            count={linePositions.length / 3}
+            array={linePositions}
+            itemSize={3}
+          />
+        </bufferGeometry>
+        <lineBasicMaterial color="#00f2ff" transparent opacity={0.15} blending={THREE.AdditiveBlending} />
+      </lineSegments>
+
+      {/* Mist layers */}
+      <MistLayer count={2500} color="#06b6d4" size={0.15} speed={0.04} agents={agents} />
+
+      {/* Neural impulses */}
+      <NeuralImpulses positions={positions} count={35} />
+
+      {/* Task connection bezier curves */}
+      <TaskConnections tasks={tasks} agents={agents} />
+
+      {/* Agent node markers */}
       <AgentNodes agents={agents} />
-
-      <OrbitControls
-        enableZoom={false}
-        enablePan={false}
-        autoRotate
-        autoRotateSpeed={0.3}
-        minPolarAngle={Math.PI / 4}
-        maxPolarAngle={Math.PI * 3 / 4}
-      />
-    </>
+    </group>
   );
-}
+};
 
-// ── Exported Component ──────────────────────────────
+// ── Exported BrainCloud component ───────────────────
 
-interface BrainVisualizationProps {
+interface BrainCloudProps {
   agents: Agent[];
   tasks: Task[];
 }
 
-export function BrainVisualization({ agents, tasks }: BrainVisualizationProps) {
-  const handleCreated = useCallback(({ gl }: { gl: THREE.WebGLRenderer }) => {
-    gl.setClearColor("#000000", 0);
-    gl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  }, []);
-
+export const BrainCloud: React.FC<BrainCloudProps> = ({ agents, tasks }) => {
   return (
-    <div
-      className="relative w-full rounded-xl overflow-hidden border border-border"
-      style={{ height: "500px" }}
-      role="img"
-      aria-label="3D brain visualization showing AI agent neural network connections"
-    >
-      {/* Gradient overlay at bottom */}
-      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background to-transparent z-10 pointer-events-none" />
+    <div className="w-full h-full">
+      <Canvas dpr={[1, 2]}>
+        <PerspectiveCamera makeDefault position={[0, 0, 7.5]} fov={32} />
+        <color attach="background" args={['#0a0b0d']} />
+        <ambientLight intensity={0.4} />
+        <pointLight position={[5, 5, 5]} intensity={2.5} color="#00f2ff" />
+        <pointLight position={[-5, 3, -5]} intensity={1.0} color="#6B21A8" />
 
-      {/* Title overlay */}
-      <div className="absolute top-4 left-5 z-10 pointer-events-none">
-        <h2 className="text-sm font-semibold text-text-primary flex items-center gap-2">
-          <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-          Neural Network
-        </h2>
-        <p className="text-xs text-text-muted mt-1">Agent collaboration topology</p>
-      </div>
+        <Stars radius={60} depth={50} count={3000} factor={4} saturation={0} fade speed={0.6} />
 
-      {/* Legend */}
-      <div className="absolute top-4 right-5 z-10 pointer-events-none flex flex-col gap-1.5">
-        {agents.map((a) => (
-          <div key={a.id} className="flex items-center gap-1.5 text-[10px]">
-            <span
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: AGENT_COLORS[a.id] }}
-            />
-            <span className="text-text-muted">{a.name}</span>
-          </div>
-        ))}
-      </div>
+        <Float speed={2} rotationIntensity={0.25} floatIntensity={0.4}>
+          <CoreNeuralMesh agents={agents} tasks={tasks} />
+        </Float>
 
-      <Canvas
-        camera={{ position: [0, 0, 3], fov: 50 }}
-        onCreated={handleCreated}
-        dpr={[1, 2]}
-        style={{ background: "transparent" }}
-      >
-        <BrainScene agents={agents} tasks={tasks} />
+        <OrbitControls
+          enablePan={false}
+          enableZoom={true}
+          minDistance={4}
+          maxDistance={14}
+          autoRotate={false}
+        />
       </Canvas>
     </div>
   );
-}
+};
