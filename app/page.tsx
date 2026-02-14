@@ -7,7 +7,7 @@ import { Grid } from "@/components/Grid";
 import { KPICard } from "@/components/KPICard";
 import { StatusIndicator } from "@/components/StatusIndicator";
 import { AgentCard } from "@/components/AgentCard";
-import { useAgents, useSystemStatus, useWeeklyChart, useTokenDistribution } from "@/lib/hooks";
+import { useAgents, useTasks, useSystemStatus, useWeeklyChart, useTokenDistribution } from "@/lib/hooks";
 import { Users, ListTodo, Clock, HeartPulse } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -19,15 +19,21 @@ const PieChartCard = dynamic(() => import("@/components/PieChartCard").then(m =>
   loading: () => <div className="glass p-5 h-[280px] animate-pulse" />,
   ssr: false,
 });
+const BrainVisualization = dynamic(() => import("@/components/BrainVisualization").then(m => ({ default: m.BrainVisualization })), {
+  loading: () => <div className="w-full h-[500px] rounded-xl border border-border animate-pulse bg-surface" />,
+  ssr: false,
+});
 
 export default function Dashboard() {
   const router = useRouter();
   const { data: agents } = useAgents();
+  const { data: taskList } = useTasks();
   const { data: statuses } = useSystemStatus();
   const { data: chartData } = useWeeklyChart();
   const { data: tokenDist } = useTokenDistribution();
 
   const agentList = agents ?? [];
+  const allTasks = taskList ?? [];
   const totalTasks = agentList.reduce((s, a) => s + a.tasksToday, 0);
   const avgResponse = agentList.length
     ? Math.round(agentList.reduce((s, a) => s + a.avgResponse, 0) / agentList.length)
@@ -70,6 +76,13 @@ export default function Dashboard() {
               ))}
             </Grid>
           </div>
+
+          {/* Brain Visualization — hidden on mobile */}
+          {agentList.length > 0 && (
+            <div className="mt-8 hidden md:block">
+              <BrainVisualization agents={agentList} tasks={allTasks} />
+            </div>
+          )}
 
           <div className="mt-8">
             <h2 className="text-sm font-semibold text-text-primary mb-4">Agent Overview</h2>
