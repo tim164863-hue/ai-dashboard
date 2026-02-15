@@ -20,7 +20,13 @@ const PieChartCard = dynamic(() => import("@/components/PieChartCard").then(m =>
   ssr: false,
 });
 const BrainVisualization = dynamic(() => import("@/components/BrainVisualization").then(m => ({ default: m.BrainVisualization })), {
-  loading: () => <div className="w-full h-[500px] rounded-xl border border-border animate-pulse bg-surface" />,
+  loading: () => (
+    <div className="w-full h-[520px] border border-border animate-pulse bg-surface hud-corners hud-corners-bottom" style={{ borderRadius: "2px" }}>
+      <div className="absolute top-4 left-5">
+        <div className="text-[10px] font-display font-bold text-primary/30 tracking-[0.3em] uppercase">Loading Neural Visualizer...</div>
+      </div>
+    </div>
+  ),
   ssr: false,
 });
 
@@ -47,17 +53,19 @@ export default function Dashboard() {
       <Sidebar />
 
       <main id="main-content" className="flex-1 ml-0 lg:ml-56 p-6 pt-16 lg:pt-8 lg:p-8">
+        {/* Ambient glow background */}
         <div className="fixed inset-0 pointer-events-none" aria-hidden="true">
-          <div className="absolute top-0 left-1/3 w-[500px] h-[500px] bg-primary/3 rounded-full blur-[120px]" />
-          <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-secondary/3 rounded-full blur-[100px]" />
+          <div className="absolute top-0 left-1/3 w-[500px] h-[500px] bg-primary/3 rounded-full blur-[150px]" />
+          <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-secondary/3 rounded-full blur-[120px]" />
         </div>
 
         <div className="relative z-10 max-w-7xl mx-auto">
           <Header
             title="AI Team Dashboard"
-            subtitle="Real-time monitoring and analytics for your AI operations"
+            subtitle="SYS_MONITOR // REAL-TIME ANALYTICS // OPENCLAW_CORE"
           />
 
+          {/* KPI Cards */}
           <Grid cols={4} gap="md">
             <KPICard title="Active Agents" value={agentList.filter(a => a.status !== "offline").length} unit="agents" trend="up" trendValue="+1 today" icon={<Users size={20} />} />
             <KPICard title="Tasks Today" value={totalTasks} unit="tasks" trend="up" trendValue="+15%" icon={<ListTodo size={20} />} />
@@ -65,9 +73,10 @@ export default function Dashboard() {
             <KPICard title="Avg Success" value={avgSuccess} unit="%" trend="neutral" trendValue="Stable" icon={<HeartPulse size={20} />} />
           </Grid>
 
-          <div className="mt-8 glass p-5">
-            <h2 className="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
-              <span className="w-2 h-2 bg-primary rounded-full animate-pulse" aria-hidden="true" />
+          {/* System Status */}
+          <div className="mt-8 glass p-5 hud-corners">
+            <h2 className="text-[10px] font-display font-bold text-primary mb-4 flex items-center gap-2 tracking-[0.2em] uppercase">
+              <span className="w-1.5 h-1.5 bg-primary animate-pulse" style={{ boxShadow: "0 0 6px #00F0FF" }} aria-hidden="true" />
               System Status
             </h2>
             <Grid cols={4} gap="md">
@@ -77,15 +86,19 @@ export default function Dashboard() {
             </Grid>
           </div>
 
-          {/* Brain Visualization — hidden on mobile */}
+          {/* Brain Visualization */}
           {agentList.length > 0 && (
             <div className="mt-8 hidden md:block">
               <BrainVisualization agents={agentList} tasks={allTasks} />
             </div>
           )}
 
+          {/* Agent Overview */}
           <div className="mt-8">
-            <h2 className="text-sm font-semibold text-text-primary mb-4">Agent Overview</h2>
+            <h2 className="text-[10px] font-display font-bold text-primary mb-4 tracking-[0.2em] uppercase flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-secondary" style={{ boxShadow: "0 0 6px #FF2D6B" }} aria-hidden="true" />
+              Agent Overview
+            </h2>
             <Grid cols={3} gap="md">
               {agentList.map((agent) => (
                 <AgentCard
@@ -104,7 +117,14 @@ export default function Dashboard() {
             </Grid>
           </div>
 
-          <Grid cols={3} gap="md" className="mt-8">
+          {/* Charts */}
+          <div className="mt-8 mb-4">
+            <h2 className="text-[10px] font-display font-bold text-primary mb-4 tracking-[0.2em] uppercase flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-accent" style={{ boxShadow: "0 0 6px #FCEE09" }} aria-hidden="true" />
+              Analytics
+            </h2>
+          </div>
+          <Grid cols={3} gap="md">
             <DashboardChart
               title="Weekly Task Volume"
               type="line"
@@ -116,7 +136,7 @@ export default function Dashboard() {
               type="bar"
               data={chartData ?? []}
               dataKeys={["ula", "0xcat", "kawa"]}
-              colors={["#00D9FF", "#00E676", "#FFB800"]}
+              colors={["#00F0FF", "#00E676", "#FFB800"]}
             />
             <PieChartCard
               title="Token Distribution"

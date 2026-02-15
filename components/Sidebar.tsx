@@ -22,10 +22,10 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: "/", icon: <LayoutDashboard size={20} />, label: "Dashboard" },
-  { href: "/agents", icon: <Users size={20} />, label: "Agents" },
-  { href: "/tasks", icon: <ListTodo size={20} />, label: "Tasks" },
-  { href: "/settings", icon: <Settings size={20} />, label: "Settings" },
+  { href: "/", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
+  { href: "/agents", icon: <Users size={18} />, label: "Agents" },
+  { href: "/tasks", icon: <ListTodo size={18} />, label: "Tasks" },
+  { href: "/settings", icon: <Settings size={18} />, label: "Settings" },
 ];
 
 export function Sidebar() {
@@ -33,12 +33,10 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Close mobile menu on route change
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
 
-  // Close mobile menu on resize to desktop
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
     const handler = (e: MediaQueryListEvent) => {
@@ -53,8 +51,8 @@ export function Sidebar() {
       {/* Mobile hamburger */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="fixed top-4 left-4 z-50 lg:hidden p-2 rounded-lg bg-surface border border-border
-          text-text-secondary hover:text-text-primary transition-colors duration-200"
+        className="fixed top-4 left-4 z-50 lg:hidden p-2 bg-surface border border-border
+          text-text-secondary hover:text-primary transition-colors duration-200"
         aria-label="Open navigation"
       >
         <Menu size={20} />
@@ -63,7 +61,7 @@ export function Sidebar() {
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden"
           onClick={() => setMobileOpen(false)}
           aria-hidden="true"
         />
@@ -81,21 +79,30 @@ export function Sidebar() {
         {/* Logo row */}
         <div className="flex items-center justify-between px-4 h-16 border-b border-border">
           <div className="flex items-center gap-3">
-            <Activity size={24} className="text-primary shrink-0" />
+            <Activity size={22} className="text-primary shrink-0" />
             {!collapsed && (
-              <span className="text-lg font-semibold text-text-primary whitespace-nowrap">
-                AI Dashboard
+              <span className="text-sm font-display font-bold text-primary tracking-wider uppercase text-glow whitespace-nowrap">
+                AI HQ
               </span>
             )}
           </div>
-          {/* Mobile close */}
           <button
             onClick={() => setMobileOpen(false)}
-            className="lg:hidden p-1 text-text-muted hover:text-text-primary transition-colors duration-200"
+            className="lg:hidden p-1 text-text-muted hover:text-primary transition-colors duration-200"
             aria-label="Close navigation"
           >
             <X size={18} />
           </button>
+        </div>
+
+        {/* System status line */}
+        <div className="px-4 py-2 border-b border-border">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 bg-success animate-pulse" style={{ boxShadow: "0 0 6px #00E676" }} />
+            <span className="text-[8px] font-mono text-text-muted uppercase tracking-[0.2em]">
+              SYS_ONLINE
+            </span>
+          </div>
         </div>
 
         {/* Nav Items */}
@@ -109,12 +116,12 @@ export function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg
+                className={`flex items-center gap-3 px-3 py-2.5
                   transition-all duration-200 group
                   ${
                     isActive
-                      ? "bg-primary/10 text-primary border border-primary/20"
-                      : "text-text-secondary hover:bg-surface-elevated hover:text-text-primary border border-transparent"
+                      ? "bg-primary/10 text-primary border-l-2 border-primary"
+                      : "text-text-secondary hover:bg-surface-elevated hover:text-text-primary border-l-2 border-transparent"
                   }`}
                 aria-current={isActive ? "page" : undefined}
               >
@@ -122,27 +129,26 @@ export function Sidebar() {
                   {item.icon}
                 </span>
                 {!collapsed && (
-                  <span className="text-sm font-medium">{item.label}</span>
+                  <span className="text-[11px] font-mono font-bold uppercase tracking-wider">{item.label}</span>
                 )}
               </Link>
             );
           })}
         </nav>
 
-        {/* Collapse Toggle (desktop only) */}
+        {/* Collapse Toggle */}
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="hidden lg:flex items-center justify-center h-12 border-t border-border
-            text-text-muted hover:text-text-primary transition-colors duration-200"
+            text-text-muted hover:text-primary transition-colors duration-200"
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
       </aside>
     </>
   );
 }
 
-/** Utility class string for main content margin that matches sidebar width */
 export const sidebarMargin = "ml-0 lg:ml-56";
 export const sidebarMarginCollapsed = "ml-0 lg:ml-16";
