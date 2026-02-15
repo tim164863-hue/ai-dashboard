@@ -54,6 +54,7 @@ export function Sidebar() {
         className="fixed top-4 left-4 z-50 lg:hidden p-2 bg-surface border border-border
           text-text-secondary hover:text-primary transition-colors duration-200"
         aria-label="Open navigation"
+        style={{ borderRadius: "2px" }}
       >
         <Menu size={20} />
       </button>
@@ -79,10 +80,10 @@ export function Sidebar() {
         {/* Logo row */}
         <div className="flex items-center justify-between px-4 h-16 border-b border-border">
           <div className="flex items-center gap-3">
-            <Activity size={22} className="text-primary shrink-0" />
+            <Activity size={22} className="text-primary shrink-0" style={{ filter: "drop-shadow(0 0 6px rgba(0,240,255,0.5))" }} />
             {!collapsed && (
-              <span className="text-sm font-display font-bold text-primary tracking-wider uppercase text-glow whitespace-nowrap">
-                AI HQ
+              <span className="text-xs font-display font-bold text-primary tracking-[0.15em] uppercase text-glow whitespace-nowrap">
+                AI DASH
               </span>
             )}
           </div>
@@ -98,10 +99,8 @@ export function Sidebar() {
         {/* System status line */}
         <div className="px-4 py-2 border-b border-border">
           <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 bg-success animate-pulse" style={{ boxShadow: "0 0 6px #00E676" }} />
-            <span className="text-[8px] font-mono text-text-muted uppercase tracking-[0.2em]">
-              SYS_ONLINE
-            </span>
+            <span className="w-1.5 h-1.5 bg-success rounded-none animate-pulse" style={{ boxShadow: "0 0 6px #00E676" }} />
+            <span className="text-[8px] font-mono text-text-muted uppercase tracking-widest">SYS_ONLINE</span>
           </div>
         </div>
 
@@ -117,29 +116,41 @@ export function Sidebar() {
                 key={item.href}
                 href={item.href}
                 className={`flex items-center gap-3 px-3 py-2.5
-                  transition-all duration-200 group
+                  transition-all duration-200 group border
                   ${
                     isActive
-                      ? "bg-primary/10 text-primary border-l-2 border-primary"
-                      : "text-text-secondary hover:bg-surface-elevated hover:text-text-primary border-l-2 border-transparent"
+                      ? "bg-primary/10 text-primary border-primary/25"
+                      : "text-text-secondary hover:bg-surface-elevated hover:text-text-primary border-transparent hover:border-border"
                   }`}
+                style={{ borderRadius: "2px" }}
                 aria-current={isActive ? "page" : undefined}
               >
-                <span className={`shrink-0 ${isActive ? "text-primary" : "text-text-muted group-hover:text-text-primary"}`}>
+                <span className={`shrink-0 ${isActive ? "text-primary" : "text-text-muted group-hover:text-text-primary"}`}
+                  style={isActive ? { filter: "drop-shadow(0 0 4px rgba(0,240,255,0.4))" } : undefined}
+                >
                   {item.icon}
                 </span>
                 {!collapsed && (
-                  <span className="text-[11px] font-mono font-bold uppercase tracking-wider">{item.label}</span>
+                  <span className="text-[11px] font-mono font-medium uppercase tracking-wider">{item.label}</span>
                 )}
               </Link>
             );
           })}
         </nav>
 
+        {/* Version info */}
+        <div className="px-4 py-2 border-t border-border">
+          {!collapsed && (
+            <span className="text-[7px] font-mono text-text-muted/50 uppercase tracking-widest">
+              v2.0.77 // OPENCLAW
+            </span>
+          )}
+        </div>
+
         {/* Collapse Toggle */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="hidden lg:flex items-center justify-center h-12 border-t border-border
+          className="hidden lg:flex items-center justify-center h-10 border-t border-border
             text-text-muted hover:text-primary transition-colors duration-200"
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >

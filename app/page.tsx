@@ -21,10 +21,8 @@ const PieChartCard = dynamic(() => import("@/components/PieChartCard").then(m =>
 });
 const BrainVisualization = dynamic(() => import("@/components/BrainVisualization").then(m => ({ default: m.BrainVisualization })), {
   loading: () => (
-    <div className="w-full h-[520px] border border-border animate-pulse bg-surface hud-corners hud-corners-bottom" style={{ borderRadius: "2px" }}>
-      <div className="absolute top-4 left-5">
-        <div className="text-[10px] font-display font-bold text-primary/30 tracking-[0.3em] uppercase">Loading Neural Visualizer...</div>
-      </div>
+    <div className="w-full h-[520px] border border-border hud-corners hud-corners-bottom animate-pulse bg-surface flex items-center justify-center" style={{ borderRadius: "2px" }}>
+      <span className="text-[10px] font-display text-text-muted tracking-[0.3em] uppercase animate-pulse">INITIALIZING NEURAL MESH...</span>
     </div>
   ),
   ssr: false,
@@ -53,7 +51,7 @@ export default function Dashboard() {
       <Sidebar />
 
       <main id="main-content" className="flex-1 ml-0 lg:ml-56 p-6 pt-16 lg:pt-8 lg:p-8">
-        {/* Ambient glow background */}
+        {/* Ambient glow backgrounds */}
         <div className="fixed inset-0 pointer-events-none" aria-hidden="true">
           <div className="absolute top-0 left-1/3 w-[500px] h-[500px] bg-primary/3 rounded-full blur-[150px]" />
           <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-secondary/3 rounded-full blur-[120px]" />
@@ -62,21 +60,21 @@ export default function Dashboard() {
         <div className="relative z-10 max-w-7xl mx-auto">
           <Header
             title="AI Team Dashboard"
-            subtitle="SYS_MONITOR // REAL-TIME ANALYTICS // OPENCLAW_CORE"
+            subtitle="REAL-TIME MONITORING // NEURAL OPERATIONS CENTER"
           />
 
           {/* KPI Cards */}
           <Grid cols={4} gap="md">
-            <KPICard title="Active Agents" value={agentList.filter(a => a.status !== "offline").length} unit="agents" trend="up" trendValue="+1 today" icon={<Users size={20} />} />
+            <KPICard title="Active Agents" value={agentList.filter(a => a.status !== "offline").length} unit="online" trend="up" trendValue="+1 today" icon={<Users size={20} />} />
             <KPICard title="Tasks Today" value={totalTasks} unit="tasks" trend="up" trendValue="+15%" icon={<ListTodo size={20} />} />
             <KPICard title="Avg Response" value={avgResponse} unit="ms" trend="down" trendValue="-12%" icon={<Clock size={20} />} />
-            <KPICard title="Avg Success" value={avgSuccess} unit="%" trend="neutral" trendValue="Stable" icon={<HeartPulse size={20} />} />
+            <KPICard title="Success Rate" value={avgSuccess} unit="%" trend="neutral" trendValue="Stable" icon={<HeartPulse size={20} />} />
           </Grid>
 
           {/* System Status */}
-          <div className="mt-8 glass p-5 hud-corners">
+          <div className="mt-8 glass p-5 hud-corners hud-corners-bottom" style={{ borderRadius: "2px" }}>
             <h2 className="text-[10px] font-display font-bold text-primary mb-4 flex items-center gap-2 tracking-[0.2em] uppercase">
-              <span className="w-1.5 h-1.5 bg-primary animate-pulse" style={{ boxShadow: "0 0 6px #00F0FF" }} aria-hidden="true" />
+              <span className="w-1.5 h-1.5 bg-primary animate-pulse" aria-hidden="true" style={{ boxShadow: "0 0 6px rgba(0,240,255,0.5)" }} />
               System Status
             </h2>
             <Grid cols={4} gap="md">
@@ -95,8 +93,7 @@ export default function Dashboard() {
 
           {/* Agent Overview */}
           <div className="mt-8">
-            <h2 className="text-[10px] font-display font-bold text-primary mb-4 tracking-[0.2em] uppercase flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-secondary" style={{ boxShadow: "0 0 6px #FF2D6B" }} aria-hidden="true" />
+            <h2 className="text-[10px] font-display font-bold text-primary mb-4 tracking-[0.2em] uppercase text-glow">
               Agent Overview
             </h2>
             <Grid cols={3} gap="md">
@@ -118,13 +115,7 @@ export default function Dashboard() {
           </div>
 
           {/* Charts */}
-          <div className="mt-8 mb-4">
-            <h2 className="text-[10px] font-display font-bold text-primary mb-4 tracking-[0.2em] uppercase flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-accent" style={{ boxShadow: "0 0 6px #FCEE09" }} aria-hidden="true" />
-              Analytics
-            </h2>
-          </div>
-          <Grid cols={3} gap="md">
+          <Grid cols={3} gap="md" className="mt-8">
             <DashboardChart
               title="Weekly Task Volume"
               type="line"
